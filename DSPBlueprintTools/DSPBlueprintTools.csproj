@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>DSPBlueprintTools</AssemblyName>
+    <LangVersion>9.0</LangVersion>
+    <Version>1.3.4</Version>
+    <RootNamespace>DSPBlueprintTools</RootNamespace>
+    <OutputPath>bin</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <DebugType>none</DebugType>
+
+    <!--
+      引用 DLL 来源（按顺序查找）：
+      1. 本仓库 libs\ 目录（已包含 Assembly-CSharp.dll / BepInEx.dll / 0Harmony.dll）
+      2. 你的游戏安装目录（改 GameDir 后自动使用游戏自带引用）
+    -->
+    <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Dyson Sphere Program</GameDir>
+    <LibDir>$(MSBuildThisFileDirectory)..\libs</LibDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.dll')">$(LibDir)\UnityEngine.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.dll')">$(GameDir)\DSPGAME_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.CoreModule.dll')">$(LibDir)\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.CoreModule.dll')">$(GameDir)\DSPGAME_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.InputLegacyModule.dll')">$(LibDir)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.InputLegacyModule.dll')">$(GameDir)\DSPGAME_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.IMGUIModule.dll')">$(LibDir)\UnityEngine.IMGUIModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.IMGUIModule.dll')">$(GameDir)\DSPGAME_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.TextRenderingModule.dll')">$(LibDir)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.TextRenderingModule.dll')">$(GameDir)\DSPGAME_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.UI.dll')">$(LibDir)\UnityEngine.UI.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.UI.dll')">$(GameDir)\DSPGAME_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath Condition="Exists('$(LibDir)\Assembly-CSharp.dll')">$(LibDir)\Assembly-CSharp.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\Assembly-CSharp.dll')">$(GameDir)\DSPGAME_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath Condition="Exists('$(LibDir)\BepInEx.dll')">$(LibDir)\BepInEx.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\BepInEx.dll')">$(GameDir)\BepInEx\core\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath Condition="Exists('$(LibDir)\0Harmony.dll')">$(LibDir)\0Harmony.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\0Harmony.dll')">$(GameDir)\BepInEx\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="Deploy" AfterTargets="Build" Condition="Exists('$(GameDir)\BepInEx')">
+    <Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="$(GameDir)\BepInEx\plugins\DSPBlueprintTools\" />
+  </Target>
+
+</Project>

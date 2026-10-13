@@ -1,0 +1,84 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>DSPMinerMultiplier</AssemblyName>
+    <LangVersion>9.0</LangVersion>
+    <Version>1.1.0</Version>
+    <RootNamespace>DSPMinerMultiplier</RootNamespace>
+    <OutputPath>bin</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <DebugType>none</DebugType>
+
+    <!--
+      引用 DLL 来源（按顺序查找）：
+      1. 本仓库 libs\ 目录（已包含 Assembly-CSharp.dll / BepInEx.dll / 0Harmony.dll）
+      2. 你的游戏安装目录（改 GameDir 后自动使用游戏自带引用）
+    -->
+    <GameDir>D:\SteamLibrary\steamapps\common\Dyson Sphere Program</GameDir>
+    <GameManaged>$(GameDir)\DYSON SPHERE PROGRAM_Data\Managed</GameManaged>
+    <LibDir>$(MSBuildThisFileDirectory)..\libs</LibDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.CoreModule" Version="2020.3.1" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.dll')">$(LibDir)\UnityEngine.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.dll')">$(GameManaged)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.CoreModule.dll')">$(LibDir)\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.CoreModule.dll')">$(GameManaged)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.InputLegacyModule.dll')">$(LibDir)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.InputLegacyModule.dll')">$(GameManaged)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.IMGUIModule.dll')">$(LibDir)\UnityEngine.IMGUIModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.IMGUIModule.dll')">$(GameManaged)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="NebulaAPI">
+      <HintPath Condition="Exists('$(LibDir)\NebulaAPI.dll')">$(LibDir)\NebulaAPI.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\NebulaAPI.dll')">$(GameDir)\BepInEx\plugins\NebulaMultiplayerModApi\NebulaAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.UI.dll')">$(LibDir)\UnityEngine.UI.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.UI.dll')">$(GameManaged)\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.TextRenderingModule.dll')">$(LibDir)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.TextRenderingModule.dll')">$(GameManaged)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath Condition="Exists('$(LibDir)\Assembly-CSharp.dll')">$(LibDir)\Assembly-CSharp.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\Assembly-CSharp.dll')">$(GameManaged)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath Condition="Exists('$(LibDir)\BepInEx.dll')">$(LibDir)\BepInEx.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\BepInEx.dll')">$(GameDir)\BepInEx\core\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath Condition="Exists('$(LibDir)\0Harmony.dll')">$(LibDir)\0Harmony.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\0Harmony.dll')">$(GameDir)\BepInEx\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="Deploy" AfterTargets="Build" Condition="Exists('$(GameDir)\BepInEx')">
+    <Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="$(GameDir)\BepInEx\plugins\DSPMinerMultiplier\" />
+  </Target>
+
+</Project>

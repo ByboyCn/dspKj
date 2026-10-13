@@ -1,0 +1,11 @@
+{
+  "name": "DSPMinerMultiplier",
+  "version_number": "1.4.1",
+  "website_url": "https://github.com/Byboy",
+  "description": "Mining machine multiplier 1-1000x, power cost linearly up to 256x. Alt+F1 in-game panel, all production/power displays synced, Nebula multiplayer support.",
+  "dependencies": [
+    "xiaoye97-BepInEx-5.4.17",
+    "nebula-NebulaMultiplayerModApi-2.1.0",
+    "nebula-NebulaMultiplayerMod-0.9.23"
+  ]
+}

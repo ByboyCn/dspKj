@@ -1,0 +1,15 @@
+# 构建产物
+bin/
+obj/
+*.zip
+
+# 反编译参考代码（体积大，不入库）
+decompiled/
+decompiled-full/
+
+# 临时文件
+*.user
+.vs/
+
+old_method.txt
+openapi.json
