@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
+using BepInEx.Logging;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -24,7 +25,7 @@ namespace DSPBlueprintTools
     {
         public const string GUID = "dsp.byboy.blueprinttools";
         public const string NAME = "DSPBlueprintTools";
-        public const string VERSION = "1.3.4";
+        public const string VERSION = "1.3.5";
 
         private const int MaxBlueprintBuildings = 15000; // 游戏蓝图建筑上限
         private const int BeltItemId = 2001;             // 传送带物品 ID（2002 是分拣器），仅作快速路径
@@ -893,8 +894,7 @@ namespace DSPBlueprintTools
         }
 
         /// <summary>
-        /// 自动探测蓝图中传送带的段数与长度范围。
-        /// 蓝图里已有的最长段即为游戏实际接受的上限，可作为合并参考。
+        /// 自动探测蓝图中传送带的段数与长度范围，并把物品 ID 诊断信息写入 BepInEx 日志。
         /// </summary>
         private void AnalyzeBelts()
         {
@@ -903,10 +903,12 @@ namespace DSPBlueprintTools
             int cnt = 0, zeroLen = 0;
             float min = float.MaxValue, max = 0f;
             var idHistogram = new Dictionary<int, int>();
+            var modelSamples = new Dictionary<int, int>(); // itemId -> 第一个样本的 modelIndex
             foreach (var b in _bp.buildings)
             {
                 if (!idHistogram.ContainsKey(b.itemId)) idHistogram[b.itemId] = 0;
                 idHistogram[b.itemId]++;
+                if (!modelSamples.ContainsKey(b.itemId)) modelSamples[b.itemId] = b.modelIndex;
                 if (!IsBelt(b)) continue;
                 cnt++;
                 float len = Vector3.Distance(
@@ -916,6 +918,19 @@ namespace DSPBlueprintTools
                 if (len < min) min = len;
                 if (len > max) max = len;
             }
+
+            // 诊断日志：每种物品的数量、modelIndex 与游戏的 isBelt 判定结果
+            try
+            {
+                foreach (var kv in idHistogram.OrderBy(p => p.Key))
+                {
+                    bool belt = IsBeltByModel(modelSamples[kv.Key]);
+                    Logger.Log(LogLevel.Info, $"[蓝图诊断] itemId={kv.Key} × {kv.Value}，modelIndex={modelSamples[kv.Key]}，isBelt={belt}");
+                }
+            }
+            catch { }
+
+            var parts = idHistogram.OrderBy(p => p.Key).Select(p => p.Key + "×" + p.Value);
             if (cnt > 0)
             {
                 _beltStat = zeroLen == cnt
@@ -924,10 +939,21 @@ namespace DSPBlueprintTools
             }
             else
             {
-                // 没有传送带时显示物品 ID 分布，便于定位问题
-                var parts = idHistogram.OrderBy(p => p.Key)
-                    .Select(p => p.Key + "×" + p.Value);
                 _beltStat = "未探测到传送带；蓝图物品ID分布: " + string.Join(", ", parts);
+            }
+        }
+
+        /// <summary>仅按模型原型判断 isBelt（不带 itemId 快速路径）。</summary>
+        private static bool IsBeltByModel(int modelIndex)
+        {
+            try
+            {
+                var model = LDB.models.Select(modelIndex);
+                return model?.prefabDesc != null && model.prefabDesc.isBelt;
+            }
+            catch
+            {
+                return false;
             }
         }
 
