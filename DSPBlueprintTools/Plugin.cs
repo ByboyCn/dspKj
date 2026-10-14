@@ -25,7 +25,7 @@ namespace DSPBlueprintTools
     {
         public const string GUID = "dsp.byboy.blueprinttools";
         public const string NAME = "DSPBlueprintTools";
-        public const string VERSION = "1.3.5";
+        public const string VERSION = "1.3.6";
 
         private const int MaxBlueprintBuildings = 15000; // 游戏蓝图建筑上限
         private const int BeltItemId = 2001;             // 传送带物品 ID（2002 是分拣器），仅作快速路径
@@ -58,6 +58,7 @@ namespace DSPBlueprintTools
         private Vector2 _scroll;
         private string _status = "按快捷键打开/关闭本窗口";
         private BlueprintData _bp;               // 当前载入的蓝图
+        private BlueprintData _bpOriginal;       // 最初读取的原始蓝图（还原用）
         private string _bpDesc = "(未载入蓝图)";
         private string _beltStat = "";           // 传送带自动探测结果
 
@@ -233,6 +234,10 @@ namespace DSPBlueprintTools
                 ReadFromClipboard();
             if (GUILayout.Button("写回剪贴板", GUILayout.Height(26)))
                 WriteToClipboard();
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("还原原始蓝图（放回剪贴板）", GUILayout.Height(26)))
+                RestoreOriginal();
             if (GUILayout.Button("应用/预览", GUILayout.Height(26), GUILayout.Width(80)))
                 ApplyToPasteTool();
             GUILayout.EndHorizontal();
@@ -333,6 +338,7 @@ namespace DSPBlueprintTools
                     return;
                 }
                 _bp = bp;
+                _bpOriginal = bp.Clone(); // 保留原始蓝图，供"还原"使用
                 _bpDesc = $"已载入：{bp.shortDesc} | 建筑 {bp.buildings.Length} 个";
                 AnalyzeBelts();
                 _status = "从剪贴板读取成功";
@@ -889,8 +895,27 @@ namespace DSPBlueprintTools
             _bp = bp;
             _bpDesc = $"当前蓝图 | 建筑 {bp.buildings.Length} 个";
             AnalyzeBelts();
-            GUIUtility.systemCopyBuffer = bp.ToBase64String();
-            _status = message + "；已写回剪贴板";
+            // 不再自动覆盖剪贴板：确认无误后点"写回剪贴板"，填错了点"还原原始蓝图"
+            _status = message + "；确认无误后请点\"写回剪贴板\"";
+        }
+
+        /// <summary>把最初读取的原始蓝图放回剪贴板（撤销所有处理，重新开始）。</summary>
+        private void RestoreOriginal()
+        {
+            if (_bpOriginal == null) { _status = "没有可还原的原始蓝图（请先读取）"; return; }
+            try
+            {
+                _bp = _bpOriginal.Clone();
+                _bp.CheckBuildingData();
+                _bpDesc = $"已还原原始蓝图 | 建筑 {_bp.buildings.Length} 个";
+                AnalyzeBelts();
+                GUIUtility.systemCopyBuffer = _bp.ToBase64String();
+                _status = "已还原原始蓝图并放回剪贴板";
+            }
+            catch (Exception ex)
+            {
+                _status = "还原异常：" + ex.Message;
+            }
         }
 
         /// <summary>
