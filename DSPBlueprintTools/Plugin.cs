@@ -25,7 +25,7 @@ namespace DSPBlueprintTools
     {
         public const string GUID = "dsp.byboy.blueprinttools";
         public const string NAME = "DSPBlueprintTools";
-        public const string VERSION = "1.3.6";
+        public const string VERSION = "1.3.7";
 
         private const int MaxBlueprintBuildings = 15000; // 游戏蓝图建筑上限
         private const int BeltItemId = 2001;             // 传送带物品 ID（2002 是分拣器），仅作快速路径
