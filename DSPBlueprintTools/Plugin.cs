@@ -25,7 +25,7 @@ namespace DSPBlueprintTools
     {
         public const string GUID = "dsp.byboy.blueprinttools";
         public const string NAME = "DSPBlueprintTools";
-        public const string VERSION = "1.4.0";
+        public const string VERSION = "1.4.1";
 
         private const int MaxBlueprintBuildings = 15000; // 游戏蓝图建筑上限
         private const int BeltItemId = 2001;             // 传送带物品 ID（2002 是分拣器），仅作快速路径
@@ -49,12 +49,13 @@ namespace DSPBlueprintTools
         private ConfigEntry<string> _hotkeyEntry;
         private ConfigEntry<float> _maxBeltLengthEntry;
         private ConfigEntry<bool> _autoBeltLatEntry;
+        private ConfigEntry<float> _uiScaleEntry;
         private KeyCode _mainKey = KeyCode.Alpha4;
         private KeyCode[] _modifierKeys = { KeyCode.LeftAlt };
 
         // ---------- 窗口状态 ----------
         private bool _showWindow;
-        private Rect _winRect = new Rect(120f, 100f, 430f, 560f);
+        private Rect _winRect = new Rect(120f, 80f, 470f, 700f); // 逻辑坐标（缩放前）
         private Vector2 _scroll;
         private string _status = "按快捷键打开/关闭本窗口";
         private BlueprintData _bp;               // 当前载入的蓝图
@@ -62,6 +63,9 @@ namespace DSPBlueprintTools
         private string _bpDesc = "(未载入蓝图)";
         private string _beltStat = "";           // 传送带自动探测结果
         private int _tab;                        // 0=处理工具 1=产线分析
+        private int _incTier;                    // 增产剂等级 0=无 1=MK1 2=MK2 3=MK3
+        private static readonly float[] IncBonus = { 0f, 0.25f, 0.5f, 1f };
+        private static readonly string[] IncTierNames = { "无", "MK1", "MK2", "MK3" };
         private readonly List<string> _analysisLines = new List<string>();
 
         // 输入缓存（字符串形式，便于编辑，应用时按 4 位小数处理）
@@ -92,6 +96,9 @@ namespace DSPBlueprintTools
             _autoBeltLatEntry = Config.Bind("传送带", "按纬度自动适配上限", true,
                 "开启后按蓝图区域纬度自动收紧上限（赤道 1.8 → 极地 1.6，线性过渡），" +
                 "关闭则始终使用上面配置的固定上限。");
+            _uiScaleEntry = Config.Bind("通用", "界面缩放", 1.0f,
+                new ConfigDescription("UI 界面整体缩放，字体与界面同步缩放。0.6 ~ 1.4。",
+                    new AcceptableValueRange<float>(0.6f, 1.4f)));
             _status = $"快捷键：{_hotkeyEntry.Value}";
         }
 
@@ -136,6 +143,11 @@ namespace DSPBlueprintTools
             {
                 _showWindow = !_showWindow;
             }
+            // 鼠标悬停在窗口上时清除输入，防止点击穿透到游戏里的设施
+            if (_showWindow && PhysicalWindowRect().Contains(Input.mousePosition))
+            {
+                Input.ResetInputAxes();
+            }
             // 低频（每 2 秒）尝试向蓝图详情窗口注入"读取"按钮；成功一次后不再执行
             if (!_readBtnCreated && Time.unscaledTime >= _nextInjectTry)
             {
@@ -146,11 +158,34 @@ namespace DSPBlueprintTools
 
         // ===================== UI =====================
 
+        /// <summary>窗口在屏幕上的物理矩形（逻辑坐标 × 缩放，Y 轴翻转到左上原点）。</summary>
+        private Rect PhysicalWindowRect()
+        {
+            float s = _uiScaleEntry.Value;
+            return new Rect(
+                _winRect.x * s,
+                Screen.height - (_winRect.y + _winRect.height) * s,
+                _winRect.width * s,
+                _winRect.height * s);
+        }
+
         private void OnGUI()
         {
             // 窗口未打开时不做任何 IMGUI 工作，避免每帧性能开销
             if (!_showWindow) return;
+
+            // 鼠标在窗口内时吞掉输入事件，防止点击穿透到游戏
+            if (PhysicalWindowRect().Contains(Event.current.mousePosition))
+            {
+                Input.ResetInputAxes();
+            }
+
+            // UI 整体缩放：字体与界面随矩阵同步缩放
+            float s = _uiScaleEntry.Value;
+            var oldMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(s, s, 1f));
             _winRect = GUILayout.Window(0x42B0, _winRect, DrawWindow, "蓝图工具 DSPBlueprintTools (v" + VERSION + ")");
+            GUI.matrix = oldMatrix;
         }
 
         /// <summary>
@@ -232,15 +267,15 @@ namespace DSPBlueprintTools
             // ---------- 蓝图信息 ----------
             GUILayout.Label(_bpDesc, GUI.skin.box);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("从剪贴板读取蓝图", GUILayout.Height(26)))
+            if (GUILayout.Button("从剪贴板读取蓝图", GUILayout.Height(24)))
                 ReadFromClipboard();
-            if (GUILayout.Button("写回剪贴板", GUILayout.Height(26)))
+            if (GUILayout.Button("写回剪贴板", GUILayout.Height(24)))
                 WriteToClipboard();
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("还原原始蓝图（放回剪贴板）", GUILayout.Height(26)))
+            if (GUILayout.Button("还原原始蓝图（放回剪贴板）", GUILayout.Height(24)))
                 RestoreOriginal();
-            if (GUILayout.Button("应用/预览", GUILayout.Height(26), GUILayout.Width(80)))
+            if (GUILayout.Button("应用/预览", GUILayout.Height(24), GUILayout.Width(90)))
                 ApplyToPasteTool();
             GUILayout.EndHorizontal();
 
@@ -310,7 +345,7 @@ namespace DSPBlueprintTools
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6);
-            GUILayout.Label("提示：处理结果自动写回游戏剪贴板，可在蓝图粘贴界面直接使用；" +
+            GUILayout.Label("提示：处理结果保留在窗口内，确认后点\"写回剪贴板\"；" +
                             "\"应用/预览\"会直接替换当前蓝图粘贴工具中的蓝图。", GUI.skin.label);
 
             GUILayout.EndScrollView();
@@ -322,11 +357,11 @@ namespace DSPBlueprintTools
 
         private static void DrawGridRow(string l1, ref string v1, string l2, ref string v2)
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(l1, GUILayout.Width(80));
-            v1 = GUILayout.TextField(v1);
-            GUILayout.Label(l2, GUILayout.Width(80));
-            v2 = GUILayout.TextField(v2);
+            GUILayout.BeginHorizontal(GUILayout.Height(24));
+            GUILayout.Label(l1, GUILayout.Width(90), GUILayout.Height(24));
+            v1 = GUILayout.TextField(v1, GUILayout.Height(24));
+            GUILayout.Label(l2, GUILayout.Width(90), GUILayout.Height(24));
+            v2 = GUILayout.TextField(v2, GUILayout.Height(24));
             GUILayout.EndHorizontal();
         }
 
@@ -1000,6 +1035,7 @@ namespace DSPBlueprintTools
                 float sorterPerSec = 0f;
                 var recipes = new Dictionary<int, int>();   // recipeId -> 机器数量
                 var asmSpeed = new Dictionary<int, float>(); // recipeId -> 机器生产加成样本
+                var incMode = new Dictionary<int, bool>();  // recipeId -> true=加速生产(forceAcc) / false=额外产出
 
                 foreach (var b in _bp.buildings)
                 {
@@ -1024,7 +1060,13 @@ namespace DSPBlueprintTools
                     }
                     else if (b.recipeId > 0)
                     {
-                        if (!recipes.ContainsKey(b.recipeId)) { recipes[b.recipeId] = 0; asmSpeed[b.recipeId] = desc.assemblerSpeed / 10000f; }
+                        if (!recipes.ContainsKey(b.recipeId))
+                        {
+                            recipes[b.recipeId] = 0;
+                            asmSpeed[b.recipeId] = desc.assemblerSpeed / 10000f;
+                            // 增产剂策略存在 parameters[0]（反编译确认：1=加速生产 forceAcc，0=额外产出）
+                            incMode[b.recipeId] = b.parameters != null && b.parameters.Length > 0 && b.parameters[0] == 1;
+                        }
                         recipes[b.recipeId]++;
                     }
                 }
@@ -1036,21 +1078,30 @@ namespace DSPBlueprintTools
                     _analysisLines.Add($"◆ 分拣器：× {sorterCount}，单个约 {sorterPerSec:F1}/s，合计搬运上限 {sorterCount * sorterPerSec * 60f:F0}/min");
 
                 // ---- 按配方统计 ----
+                float incBonus = IncBonus[Mathf.Clamp(_incTier, 0, IncBonus.Length - 1)];
+                string incTierName = IncTierNames[Mathf.Clamp(_incTier, 0, IncTierNames.Length - 1)];
+                if (_incTier > 0)
+                    _analysisLines.Add($"◆ 增产剂按 {incTierName} 计算（加成 +{incBonus * 100f:F0}%），策略取自蓝图机器设置");
                 var produce = new Dictionary<int, double>();
                 var consume = new Dictionary<int, double>();
                 foreach (var kv in recipes)
                 {
                     var recipe = LDB.recipes.Select(kv.Key);
                     if (recipe == null) continue;
+                    bool forceAcc = incMode.TryGetValue(kv.Key, out bool fa) && fa;
                     double craftSec = recipe.TimeSpend / 60.0 / Math.Max(0.01, asmSpeed[kv.Key]);
-                    if (craftSec < 0.01) craftSec = 0.01;
+                    if (forceAcc && incBonus > 0f)
+                        craftSec /= 1.0 + incBonus; // 加速生产：制作时间缩短
+                    craftSec = Math.Max(0.01, craftSec);
+                    double outMult = (!forceAcc && incBonus > 0f) ? 1.0 + incBonus : 1.0; // 额外产出：产物增加
                     double perMin = 60.0 / craftSec * kv.Value; // 该组机器每分钟完成的次数
                     string name = recipe.Name;
+                    string strategy = _incTier == 0 ? "" : forceAcc ? "［加速生产］" : "［额外产出］";
 
-                    _analysisLines.Add($"◇ {name} × {kv.Value} 台：每分钟 {perMin:F1} 轮");
+                    _analysisLines.Add($"◇ {name} × {kv.Value} 台{strategy}：每分钟 {perMin:F1} 轮");
                     for (int i = 0; i + 1 < recipe.Results.Length; i += 2)
                     {
-                        double rate = recipe.Results[i + 1] * perMin;
+                        double rate = recipe.Results[i + 1] * perMin * outMult;
                         produce[recipe.Results[i]] = produce.GetValueOrDefault(recipe.Results[i]) + rate;
                         _analysisLines.Add($"    产出 {ItemName(recipe.Results[i])}：{rate:F1}/min");
                     }
@@ -1101,6 +1152,17 @@ namespace DSPBlueprintTools
 
         private void DrawAnalysis()
         {
+            GUILayout.BeginHorizontal(GUILayout.Height(24));
+            GUILayout.Label("增产剂等级（用于计算产耗）", GUILayout.Height(24));
+            if (GUILayout.Button(IncTierNames[Mathf.Clamp(_incTier, 0, IncTierNames.Length - 1)],
+                GUILayout.Width(70), GUILayout.Height(24)))
+            {
+                _incTier = (_incTier + 1) % IncTierNames.Length;
+                BuildAnalysis(); // 切换等级后立即重算
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
             if (_analysisLines.Count == 0)
             {
                 GUILayout.Label("读取蓝图后自动分析产线。");
