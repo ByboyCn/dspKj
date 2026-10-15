@@ -25,7 +25,7 @@ namespace DSPBlueprintTools
     {
         public const string GUID = "dsp.byboy.blueprinttools";
         public const string NAME = "DSPBlueprintTools";
-        public const string VERSION = "1.4.1";
+        public const string VERSION = "1.4.2";
 
         private const int MaxBlueprintBuildings = 15000; // 游戏蓝图建筑上限
         private const int BeltItemId = 2001;             // 传送带物品 ID（2002 是分拣器），仅作快速路径
@@ -55,7 +55,8 @@ namespace DSPBlueprintTools
 
         // ---------- 窗口状态 ----------
         private bool _showWindow;
-        private Rect _winRect = new Rect(120f, 80f, 470f, 700f); // 逻辑坐标（缩放前）
+        private Rect _winRect = new Rect(120f, 60f, 470f, 748f); // 逻辑坐标（缩放前），748 = 31 行 × 24px
+        private GameObject _clickBlocker;        // uGUI 透明遮挡层，防止窗口点击穿透到游戏
         private Vector2 _scroll;
         private string _status = "按快捷键打开/关闭本窗口";
         private BlueprintData _bp;               // 当前载入的蓝图
@@ -148,6 +149,10 @@ namespace DSPBlueprintTools
             {
                 Input.ResetInputAxes();
             }
+            else if (!_showWindow && _clickBlocker != null && _clickBlocker.activeSelf)
+            {
+                _clickBlocker.SetActive(false); // 窗口关闭时移除遮挡层
+            }
             // 低频（每 2 秒）尝试向蓝图详情窗口注入"读取"按钮；成功一次后不再执行
             if (!_readBtnCreated && Time.unscaledTime >= _nextInjectTry)
             {
@@ -186,6 +191,44 @@ namespace DSPBlueprintTools
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(s, s, 1f));
             _winRect = GUILayout.Window(0x42B0, _winRect, DrawWindow, "蓝图工具 DSPBlueprintTools (v" + VERSION + ")");
             GUI.matrix = oldMatrix;
+
+            // 同步 uGUI 遮挡层（跟随窗口位置与缩放），让游戏像对待原版 UI 一样屏蔽窗口区域的点击
+            UpdateClickBlocker();
+        }
+
+        /// <summary>
+        /// 在游戏 overlayCanvas 上维护一块透明 uGUI 遮挡层，覆盖窗口区域。
+        /// 游戏输入系统会像对待原版按钮一样屏蔽该区域的鼠标点击，从根本上解决穿透。
+        /// </summary>
+        private void UpdateClickBlocker()
+        {
+            try
+            {
+                var canvas = UIRoot.instance != null ? UIRoot.instance.overlayCanvas : null;
+                if (canvas == null) return;
+
+                if (_clickBlocker == null)
+                {
+                    var go = new GameObject("DSPBT_ClickBlocker", typeof(RectTransform), typeof(Image));
+                    go.transform.SetParent(canvas.transform, false);
+                    var img = go.GetComponent<Image>();
+                    img.color = new Color(0f, 0f, 0f, 0f); // 完全透明，仅用于射线遮挡
+                    img.raycastTarget = true;
+                    _clickBlocker = go;
+                }
+
+                var rt = _clickBlocker.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                float s = _uiScaleEntry.Value;
+                Rect r = PhysicalWindowRect();
+                rt.sizeDelta = new Vector2(r.width, r.height);
+                rt.anchoredPosition = new Vector2(
+                    r.x + r.width / 2f - Screen.width / 2f,
+                    r.y + r.height / 2f - Screen.height / 2f);
+            }
+            catch { /* 画布未就绪时跳过，下一帧重试 */ }
         }
 
         /// <summary>
@@ -281,10 +324,9 @@ namespace DSPBlueprintTools
 
             _tab = GUILayout.Toolbar(_tab, new[] { "处理工具", "产线分析" });
 
-            _scroll = GUILayout.BeginScrollView(_scroll);
-
             if (_tab == 1)
             {
+                _scroll = GUILayout.BeginScrollView(_scroll);
                 DrawAnalysis();
                 GUILayout.EndScrollView();
                 GUILayout.Label(_status);
@@ -300,6 +342,10 @@ namespace DSPBlueprintTools
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("偏移（净偏移 = 偏移量 × 数量）", GUILayout.Height(24)))
                 DoOffset();
+            if (GUILayout.Button("重置", GUILayout.Width(60), GUILayout.Height(24)))
+            {
+                _ox = "0.0000"; _oy = "0.0000"; _oz = "0.0000"; _offCount = "1";
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6);
@@ -310,6 +356,10 @@ namespace DSPBlueprintTools
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("垂直叠加建筑层数", GUILayout.Height(24)))
                 DoStack();
+            if (GUILayout.Button("重置", GUILayout.Width(60), GUILayout.Height(24)))
+            {
+                _layers = "2"; _layerHeight = "10.0000";
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6);
@@ -321,6 +371,10 @@ namespace DSPBlueprintTools
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("应用缩放/旋转", GUILayout.Height(24)))
                 DoLinearTransform();
+            if (GUILayout.Button("重置", GUILayout.Width(60), GUILayout.Height(24)))
+            {
+                _sx = "1.0000"; _sy = "1.0000"; _sz = "1.0000"; _rotDeg = "0";
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.Space(4);
@@ -347,8 +401,6 @@ namespace DSPBlueprintTools
             GUILayout.Space(6);
             GUILayout.Label("提示：处理结果保留在窗口内，确认后点\"写回剪贴板\"；" +
                             "\"应用/预览\"会直接替换当前蓝图粘贴工具中的蓝图。", GUI.skin.label);
-
-            GUILayout.EndScrollView();
 
             GUILayout.Label(_status);
             GUILayout.EndVertical();

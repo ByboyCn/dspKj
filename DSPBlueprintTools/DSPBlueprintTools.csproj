@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>DSPBlueprintTools</AssemblyName>
     <LangVersion>9.0</LangVersion>
-    <Version>1.4.1</Version>
+    <Version>1.4.2</Version>
     <RootNamespace>DSPBlueprintTools</RootNamespace>
     <OutputPath>bin</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -48,6 +48,11 @@
     <Reference Include="UnityEngine.UI">
       <HintPath Condition="Exists('$(LibDir)\UnityEngine.UI.dll')">$(LibDir)\UnityEngine.UI.dll</HintPath>
       <HintPath Condition="!Exists('$(LibDir)\UnityEngine.UI.dll')">$(GameDir)\DSPGAME_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath Condition="Exists('$(LibDir)\UnityEngine.UIModule.dll')">$(LibDir)\UnityEngine.UIModule.dll</HintPath>
+      <HintPath Condition="!Exists('$(LibDir)\UnityEngine.UIModule.dll')">$(GameDir)\DSPGAME_Data\Managed\UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
