@@ -25,7 +25,7 @@ namespace DSPBlueprintTools
     {
         public const string GUID = "dsp.byboy.blueprinttools";
         public const string NAME = "DSPBlueprintTools";
-        public const string VERSION = "1.3.7";
+        public const string VERSION = "1.4.0";
 
         private const int MaxBlueprintBuildings = 15000; // 游戏蓝图建筑上限
         private const int BeltItemId = 2001;             // 传送带物品 ID（2002 是分拣器），仅作快速路径
@@ -61,6 +61,8 @@ namespace DSPBlueprintTools
         private BlueprintData _bpOriginal;       // 最初读取的原始蓝图（还原用）
         private string _bpDesc = "(未载入蓝图)";
         private string _beltStat = "";           // 传送带自动探测结果
+        private int _tab;                        // 0=处理工具 1=产线分析
+        private readonly List<string> _analysisLines = new List<string>();
 
         // 输入缓存（字符串形式，便于编辑，应用时按 4 位小数处理）
         private string _ox = "0.0000", _oy = "0.0000", _oz = "0.0000", _offCount = "1";
@@ -242,7 +244,19 @@ namespace DSPBlueprintTools
                 ApplyToPasteTool();
             GUILayout.EndHorizontal();
 
+            _tab = GUILayout.Toolbar(_tab, new[] { "处理工具", "产线分析" });
+
             _scroll = GUILayout.BeginScrollView(_scroll);
+
+            if (_tab == 1)
+            {
+                DrawAnalysis();
+                GUILayout.EndScrollView();
+                GUILayout.Label(_status);
+                GUILayout.EndVertical();
+                GUI.DragWindow(new Rect(0, 0, 10000, 24));
+                return;
+            }
 
             // ---------- 功能 1：坐标偏移 ----------
             GUILayout.Label("── 1. 坐标偏移（小数点后 4 位）──", GUI.skin.box);
@@ -965,6 +979,139 @@ namespace DSPBlueprintTools
             else
             {
                 _beltStat = "未探测到传送带；蓝图物品ID分布: " + string.Join(", ", parts);
+            }
+            BuildAnalysis();
+        }
+
+        /// <summary>
+        /// 产线分析：按配方统计机器数量与产/耗速率（台/分钟），并结合蓝图内
+        /// 传送带带宽（prefabDesc.beltSpeed×6/秒）与分拣器搬运能力估算供需是否匹配。
+        /// </summary>
+        private void BuildAnalysis()
+        {
+            _analysisLines.Clear();
+            if (_bp?.buildings == null) return;
+
+            try
+            {
+                int beltCount = 0, sorterCount = 0;
+                float beltItemsPerSec = 0f;
+                string beltName = null;
+                float sorterPerSec = 0f;
+                var recipes = new Dictionary<int, int>();   // recipeId -> 机器数量
+                var asmSpeed = new Dictionary<int, float>(); // recipeId -> 机器生产加成样本
+
+                foreach (var b in _bp.buildings)
+                {
+                    var model = LDB.models.Select(b.modelIndex);
+                    var desc = model?.prefabDesc;
+                    if (desc == null) continue;
+                    if (desc.isBelt)
+                    {
+                        beltCount++;
+                        if (beltItemsPerSec < 0.01f)
+                        {
+                            beltItemsPerSec = desc.beltSpeed * 6f; // 游戏显示公式：beltSpeed×60/10
+                            var item = LDB.items.Select(b.itemId);
+                            beltName = item?.name;
+                        }
+                    }
+                    else if (desc.isInserter)
+                    {
+                        sorterCount++;
+                        if (sorterPerSec < 0.01f)
+                            sorterPerSec = 1.5f * Mathf.Pow(2f, desc.inserterGrade); // 每级翻倍：1.5/3/6 每秒
+                    }
+                    else if (b.recipeId > 0)
+                    {
+                        if (!recipes.ContainsKey(b.recipeId)) { recipes[b.recipeId] = 0; asmSpeed[b.recipeId] = desc.assemblerSpeed / 10000f; }
+                        recipes[b.recipeId]++;
+                    }
+                }
+
+                // ---- 基础设施 ----
+                if (beltCount > 0 && beltItemsPerSec > 0.01f)
+                    _analysisLines.Add($"◆ 传送带：{beltName} × {beltCount}，单带带宽 {beltItemsPerSec * 60f:F0}/min");
+                if (sorterCount > 0 && sorterPerSec > 0.01f)
+                    _analysisLines.Add($"◆ 分拣器：× {sorterCount}，单个约 {sorterPerSec:F1}/s，合计搬运上限 {sorterCount * sorterPerSec * 60f:F0}/min");
+
+                // ---- 按配方统计 ----
+                var produce = new Dictionary<int, double>();
+                var consume = new Dictionary<int, double>();
+                foreach (var kv in recipes)
+                {
+                    var recipe = LDB.recipes.Select(kv.Key);
+                    if (recipe == null) continue;
+                    double craftSec = recipe.TimeSpend / 60.0 / Math.Max(0.01, asmSpeed[kv.Key]);
+                    if (craftSec < 0.01) craftSec = 0.01;
+                    double perMin = 60.0 / craftSec * kv.Value; // 该组机器每分钟完成的次数
+                    string name = recipe.Name;
+
+                    _analysisLines.Add($"◇ {name} × {kv.Value} 台：每分钟 {perMin:F1} 轮");
+                    for (int i = 0; i + 1 < recipe.Results.Length; i += 2)
+                    {
+                        double rate = recipe.Results[i + 1] * perMin;
+                        produce[recipe.Results[i]] = produce.GetValueOrDefault(recipe.Results[i]) + rate;
+                        _analysisLines.Add($"    产出 {ItemName(recipe.Results[i])}：{rate:F1}/min");
+                    }
+                    for (int i = 0; i + 1 < recipe.Items.Length; i += 2)
+                    {
+                        double rate = recipe.Items[i + 1] * perMin;
+                        consume[recipe.Items[i]] = consume.GetValueOrDefault(recipe.Items[i]) + rate;
+                        _analysisLines.Add($"    消耗 {ItemName(recipe.Items[i])}：{rate:F1}/min");
+                    }
+                }
+
+                // ---- 汇总与带宽评估 ----
+                if (produce.Count + consume.Count > 0)
+                {
+                    _analysisLines.Add("── 汇总 ──");
+                    foreach (var kv in produce.OrderBy(p => p.Key))
+                        _analysisLines.Add($"总产出 {ItemName(kv.Key)}：{kv.Value:F1}/min");
+                    foreach (var kv in consume.OrderBy(p => p.Key))
+                    {
+                        _analysisLines.Add($"总消耗 {ItemName(kv.Key)}：{kv.Value:F1}/min");
+                        if (beltItemsPerSec > 0.01f)
+                        {
+                            double belts = kv.Value / (beltItemsPerSec * 60.0);
+                            _analysisLines.Add($"    供给需要 ≈ {belts:F2} 条满带（{beltName ?? "传送带"}）");
+                        }
+                    }
+                }
+                if (_analysisLines.Count == 0) _analysisLines.Add("蓝图里没有可分析的配方机器");
+            }
+            catch (Exception ex)
+            {
+                _analysisLines.Add("分析异常：" + ex.Message);
+            }
+        }
+
+        private static string ItemName(int itemId)
+        {
+            try
+            {
+                var item = LDB.items.Select(itemId);
+                return item != null ? $"{item.name}({itemId})" : $"物品{itemId}";
+            }
+            catch
+            {
+                return $"物品{itemId}";
+            }
+        }
+
+        private void DrawAnalysis()
+        {
+            if (_analysisLines.Count == 0)
+            {
+                GUILayout.Label("读取蓝图后自动分析产线。");
+                return;
+            }
+            foreach (var line in _analysisLines)
+            {
+                if (line.StartsWith("◆") || line.StartsWith("──") || line.StartsWith("◇"))
+                    GUILayout.Label(line, GUI.skin.box);
+                else
+                    GUILayout.Label(line);
             }
         }
 
